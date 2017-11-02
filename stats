@@ -1,0 +1,98 @@
+#!/bin/bash
+file="file$$"
+inputFile=$file
+tempCol="tempcolfile$$"
+tempRow="temprowfile$$"
+trFile="temptrfile$$"
+meanAr="meanar$$"
+medianAr="medianar$$"
+echo "dummy" > "$file"
+trap 'rm *"$$"' EXIT
+if [ "$#" = "1" ] 
+then
+  cat > "$file"
+  if [ "$?" != "0" ]
+  then
+    echo "./stats: cannot read file" >&2
+    exit 1
+  fi
+elif [ "$#" = "2" ]
+then
+  cat $2 > "$file"
+  if [ "$?" != "0" ]
+  then
+    echo "./stats: cannot read file" >&2
+    exit 1
+  fi
+else
+  echo "./stats {-row | -cols} [file]" >&2
+  exit 1
+fi
+
+if [[ "$1" == -r* ]]
+then
+  cols=0
+elif [[ "$1" == -c* ]]
+then
+  cols=1
+else
+  echo "./stats {-rows | -cols} [file]" >&2
+  exit 1
+fi
+
+if [ "$cols" = "1" ]
+then
+  read myFile < $file
+  for i in $myFile
+  do
+    colscount=`expr $colscount + 1`
+  done
+  for (( i=1; i<="$colscount"; i++ ))
+  do
+    cut -f "$i" $inputFile > $tempCol
+    cat $tempCol | tr '\n' '\t'>> $trFile 
+    echo -e "\n" >> $trFile
+  done
+  cat $trFile > $file
+fi
+
+while read myFile
+do
+  count=0
+  sum=0
+  for i in $myFile
+  do
+    count=`expr $count + 1`
+    sum=`expr $sum + $i`
+  done
+  if [ "$count" != "0" ]
+  then
+    echo "$myFile" | tr '\t' '\n'> $tempCol
+    sort -g $tempCol | tr '\n' '\t' > $tempRow
+    mean=`expr $count / 2`
+    mean=`expr $mean + $sum`
+    mean=`expr $mean / $count` 
+    echo "$mean" >> $meanAr
+    index=`expr $count / 2`
+    index=`expr $index + 1`
+    cut -f $index $tempRow >> $medianAr
+  fi
+done < $file
+if [ "$cols" = "1" ] 
+then
+  echo "Averages:"
+  cat "$meanAr" | tr '\n' '\t'
+  echo -e "\nMedians:"
+  cat "$medianAr" | tr '\n' '\t'
+  echo -e ""
+else
+  echo "Average  Median"
+  rowOut="rowout$$"
+  for ((i=1; i<="$count"; i++ ))
+  do
+    head -$i "$meanAr" | tail -1 > $rowOut
+    head -$i "$medianAr" | tail -1 >> $rowOut
+    cat $rowOut | tr '\n' '\t' 
+    echo ""
+  done
+fi
